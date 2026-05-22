@@ -1,7 +1,7 @@
 import hashlib
 import os
 import uuid
-from dotenv import load_dotenv
+import config  # noqa: F401  -- loads .env
 from qdrant_client import QdrantClient
 from qdrant_client.models import (
     Distance,
@@ -15,7 +15,6 @@ from qdrant_client.models import (
 
 from ingestion.chunker import CodeChunk
 
-load_dotenv()
 
 VECTOR_DIM = 1024  # voyage-code-3 output dimension
 UPSERT_BATCH = 256

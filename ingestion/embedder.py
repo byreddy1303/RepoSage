@@ -1,9 +1,8 @@
 import os
 import time
-from dotenv import load_dotenv
+import config  # noqa: F401  -- loads .env
 import voyageai
 
-load_dotenv()
 
 _client: voyageai.Client | None = None
 VOYAGE_MODEL = "voyage-code-3"

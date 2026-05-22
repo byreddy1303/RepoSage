@@ -1,12 +1,11 @@
 import os
 from dataclasses import dataclass
-from dotenv import load_dotenv
+import config  # noqa: F401  -- loads .env
 from qdrant_client import QdrantClient
 from qdrant_client.models import ScoredPoint, Filter, FieldCondition, MatchValue
 
 from ingestion.embedder import embed_query
 
-load_dotenv()
 
 DEFAULT_SCORE_THRESHOLD = 0.35
 _client: QdrantClient | None = None

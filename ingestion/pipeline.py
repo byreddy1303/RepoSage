@@ -1,6 +1,6 @@
 import os
 import tempfile
-from dotenv import load_dotenv
+import config  # noqa: F401  -- loads .env
 
 from ingestion.repo_loader import load_repo, cleanup
 from ingestion.chunker import chunk_files, CodeChunk
@@ -12,7 +12,6 @@ from ingestion.vector_store import (
     collection_size,
 )
 
-load_dotenv()
 
 MIN_CHUNK_CHARS = 10  # skip chunks that are effectively empty
 
