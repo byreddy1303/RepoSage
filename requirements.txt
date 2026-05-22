@@ -1,0 +1,35 @@
+# Web framework
+fastapi==0.115.6
+uvicorn[standard]==0.32.1
+
+# AST parsing
+tree-sitter==0.23.2
+tree-sitter-python==0.23.6
+tree-sitter-javascript==0.23.1
+tree-sitter-typescript==0.23.2
+tree-sitter-java==0.23.5
+tree-sitter-go==0.23.4
+
+# Embeddings
+voyageai==0.3.2
+
+# Vector DB
+qdrant-client==1.12.1
+
+# LLM
+anthropic==0.42.0
+
+# Git / GitHub
+gitpython==3.1.44
+
+# Utilities
+python-dotenv==1.0.1
+pydantic==2.10.4
+httpx==0.28.1
+
+# Re-ranking
+sentence-transformers==3.3.1
+
+# Testing
+pytest==8.3.4
+pytest-asyncio==0.25.0
