@@ -1,15 +1,14 @@
 import os
-import anthropic
 import config  # noqa: F401  -- loads .env
+from groq import Groq
 
 from retrieval.search import SearchResult
 
-
-MODEL = "claude-haiku-4-5-20251001"
+MODEL = "llama-3.3-70b-versatile"
 MAX_CONTEXT_CHUNKS = 8
 MAX_TOKENS = 1024
 
-_client: anthropic.Anthropic | None = None
+_client: Groq | None = None
 
 SYSTEM_PROMPT = """\
 You are RepoSage, a code-understanding assistant. You answer questions about a \
@@ -23,19 +22,17 @@ Rules:
 """
 
 
-def _get_client() -> anthropic.Anthropic:
+def _get_client() -> Groq:
     global _client
     if _client is None:
-        _client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
+        _client = Groq(api_key=os.environ["GROQ_API_KEY"])
     return _client
 
 
 def _build_context(results: list[SearchResult]) -> str:
     parts = []
     for r in results[:MAX_CONTEXT_CHUNKS]:
-        parts.append(
-            f"### {r.citation}\n```{r.language}\n{r.text}\n```"
-        )
+        parts.append(f"### {r.citation}\n```{r.language}\n{r.text}\n```")
     return "\n\n".join(parts)
 
 
@@ -43,11 +40,7 @@ def answer(query: str, results: list[SearchResult]) -> dict:
     """Generate a cited answer from retrieved code chunks.
 
     Returns:
-        {
-            "answer": str,
-            "citations": [{"citation": str, "file_path": str, "start_line": int, "end_line": int}],
-            "model": str,
-        }
+        {"answer": str, "citations": list[dict], "model": str}
     """
     if not results:
         return {
@@ -57,23 +50,23 @@ def answer(query: str, results: list[SearchResult]) -> dict:
         }
 
     context = _build_context(results)
-    user_message = f"""Question: {query}
-
-Code excerpts from the repository:
-
-{context}
-
-Answer the question using only the code above. Cite every source you reference."""
-
-    client = _get_client()
-    response = client.messages.create(
-        model=MODEL,
-        max_tokens=MAX_TOKENS,
-        system=SYSTEM_PROMPT,
-        messages=[{"role": "user", "content": user_message}],
+    user_message = (
+        f"Question: {query}\n\n"
+        f"Code excerpts from the repository:\n\n{context}\n\n"
+        "Answer the question using only the code above. Cite every source you reference."
     )
 
-    answer_text = response.content[0].text
+    client = _get_client()
+    response = client.chat.completions.create(
+        model=MODEL,
+        max_tokens=MAX_TOKENS,
+        messages=[
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": user_message},
+        ],
+    )
+
+    answer_text = response.choices[0].message.content
 
     citations = [
         {
@@ -86,8 +79,4 @@ Answer the question using only the code above. Cite every source you reference."
         for r in results[:MAX_CONTEXT_CHUNKS]
     ]
 
-    return {
-        "answer": answer_text,
-        "citations": citations,
-        "model": MODEL,
-    }
+    return {"answer": answer_text, "citations": citations, "model": MODEL}

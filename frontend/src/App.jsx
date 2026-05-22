@@ -112,13 +112,14 @@ export default function App() {
   async function handleIngest(e) {
     e.preventDefault()
     if (!repoUrl.trim()) return
+    const url = repoUrl.trim()
     setIngesting(true)
     setIngestInfo(null)
     setMessages([])
-    setActiveRepo(null)
+    // Set active repo immediately so chat is usable while indexing runs
+    setActiveRepo(url)
     try {
-      const result = await ingestRepo(repoUrl.trim())
-      setActiveRepo(repoUrl.trim())
+      const result = await ingestRepo(url)
       setIngestInfo(result)
     } catch (err) {
       setIngestInfo({ error: err.message })
@@ -229,14 +230,14 @@ export default function App() {
                 type="text"
                 value={question}
                 onChange={e => setQuestion(e.target.value)}
-                placeholder="Ask a question about the code…"
+                placeholder={ingesting ? "Indexing… please wait" : "Ask a question about the code…"}
                 className="flex-1 text-sm outline-none px-1"
-                disabled={asking}
+                disabled={asking || ingesting}
                 autoFocus
               />
               <button
                 type="submit"
-                disabled={asking || !question.trim()}
+                disabled={asking || ingesting || !question.trim()}
                 className="px-3 py-1.5 bg-violet-600 hover:bg-violet-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium rounded-lg transition-colors"
               >
                 Ask

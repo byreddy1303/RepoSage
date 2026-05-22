@@ -7,13 +7,12 @@ from ingestion.chunker import chunk_files, CodeChunk
 from ingestion.embedder import embed_texts
 from ingestion.vector_store import (
     ensure_collection,
-    delete_repo_chunks,
     upsert_chunks,
+    delete_stale_chunks,
     collection_size,
 )
 
-
-MIN_CHUNK_CHARS = 10  # skip chunks that are effectively empty
+MIN_CHUNK_CHARS = 10
 
 
 def _filter_chunks(chunks: list[CodeChunk]) -> list[CodeChunk]:
@@ -21,10 +20,10 @@ def _filter_chunks(chunks: list[CodeChunk]) -> list[CodeChunk]:
 
 
 def ingest_repo(repo_url: str, collection: str | None = None) -> dict:
-    """Full ingestion pipeline: clone → chunk → embed → upsert.
+    """Full ingestion pipeline: clone → chunk → embed → upsert → delete stale.
 
-    Idempotent: re-ingesting the same repo replaces its previous chunks.
-    Returns a summary dict with counts.
+    Atomic swap: new chunks are inserted BEFORE old ones are removed, so
+    search always returns results — even during a re-index of the same repo.
     """
     collection = collection or os.environ.get("QDRANT_COLLECTION", "reposage")
     ensure_collection(collection)
@@ -52,13 +51,12 @@ def ingest_repo(repo_url: str, collection: str | None = None) -> dict:
                     "collection": collection, "total_points": collection_size(collection)}
 
         print("[3/4] Embedding chunks via Voyage AI")
-        texts = [c.text for c in chunks]
-        vectors = embed_texts(texts)
+        vectors = embed_texts([c.text for c in chunks])
         print(f"      Embedded {len(vectors)} vectors (dim={len(vectors[0])})")
 
-        print("[4/4] Upserting into Qdrant (replacing any previous data for this repo)")
-        delete_repo_chunks(repo_url, collection)
-        upsert_chunks(chunks, vectors, collection, repo_url)
+        print("[4/4] Upserting into Qdrant (atomic swap: insert new → delete stale)")
+        current_ids = upsert_chunks(chunks, vectors, collection, repo_url)
+        delete_stale_chunks(repo_url, collection, current_ids)
         size = collection_size(collection)
         print(f"      Collection '{collection}' now has {size} total points\n")
 

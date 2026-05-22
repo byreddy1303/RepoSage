@@ -17,7 +17,7 @@ voyageai==0.3.2
 qdrant-client==1.12.1
 
 # LLM
-anthropic==0.42.0
+groq==1.2.0
 
 # Git / GitHub
 gitpython==3.1.44

@@ -1,4 +1,3 @@
-import hashlib
 import os
 import uuid
 import config  # noqa: F401  -- loads .env
@@ -11,10 +10,10 @@ from qdrant_client.models import (
     Filter,
     FieldCondition,
     MatchValue,
+    HasIdCondition,
 )
 
 from ingestion.chunker import CodeChunk
-
 
 VECTOR_DIM = 1024  # voyage-code-3 output dimension
 UPSERT_BATCH = 256
@@ -32,9 +31,8 @@ def _get_client() -> QdrantClient:
     return _client
 
 
-def _chunk_id(repo_url: str, file_path: str, start_line: int) -> str:
-    """Deterministic UUID5 derived from repo + file + line.
-    Same chunk always gets the same ID → idempotent re-ingestion."""
+def chunk_id(repo_url: str, file_path: str, start_line: int) -> str:
+    """Deterministic UUID5 from repo + file + line — same chunk always gets the same ID."""
     key = f"{repo_url}::{file_path}::{start_line}"
     return str(uuid.uuid5(uuid.NAMESPACE_URL, key))
 
@@ -56,28 +54,19 @@ def ensure_collection(collection: str) -> None:
         print(f"Collection '{collection}' already exists")
 
 
-def delete_repo_chunks(repo_url: str, collection: str) -> None:
-    """Delete all previously ingested points for this repo (for idempotent re-ingestion)."""
-    client = _get_client()
-    client.delete(
-        collection_name=collection,
-        points_selector=Filter(
-            must=[FieldCondition(key="repo_url", match=MatchValue(value=repo_url))]
-        ),
-    )
-
-
 def upsert_chunks(
     chunks: list[CodeChunk],
     vectors: list[list[float]],
     collection: str,
     repo_url: str,
-) -> None:
-    """Upsert chunks + their vectors into Qdrant in batches."""
+) -> list[str]:
+    """Upsert chunks + vectors into Qdrant. Returns the list of point IDs upserted."""
     client = _get_client()
+    ids = [chunk_id(repo_url, c.file_path, c.start_line) for c in chunks]
+
     points = [
         PointStruct(
-            id=_chunk_id(repo_url, chunk.file_path, chunk.start_line),
+            id=point_id,
             vector=vec,
             payload={
                 "text": chunk.text,
@@ -89,14 +78,29 @@ def upsert_chunks(
                 "repo_url": repo_url,
             },
         )
-        for chunk, vec in zip(chunks, vectors)
+        for point_id, chunk, vec in zip(ids, chunks, vectors)
     ]
 
     for i in range(0, len(points), UPSERT_BATCH):
-        batch = points[i : i + UPSERT_BATCH]
-        client.upsert(collection_name=collection, points=batch)
+        client.upsert(collection_name=collection, points=points[i : i + UPSERT_BATCH])
 
     print(f"Upserted {len(points)} chunks into '{collection}'")
+    return ids
+
+
+def delete_stale_chunks(repo_url: str, collection: str, current_ids: list[str]) -> None:
+    """Delete any points for repo_url whose IDs are NOT in current_ids.
+
+    Called AFTER upsert so the collection is never empty during a re-index.
+    """
+    client = _get_client()
+    client.delete(
+        collection_name=collection,
+        points_selector=Filter(
+            must=[FieldCondition(key="repo_url", match=MatchValue(value=repo_url))],
+            must_not=[HasIdCondition(has_id=current_ids)],
+        ),
+    )
 
 
 def collection_size(collection: str) -> int:
