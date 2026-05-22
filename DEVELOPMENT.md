@@ -10,7 +10,7 @@ A code-aware Retrieval-Augmented Generation (RAG) system that ingests a GitHub r
 | Parsing | tree-sitter (AST-based chunking) |
 | Embeddings | Voyage AI `voyage-code-3` |
 | Vector DB | Qdrant Cloud |
-| LLM | Anthropic Claude (Haiku for cost, Sonnet for quality) |
+| LLM | Groq `llama-3.3-70b-versatile` |
 | Frontend | React + Tailwind |
 | Backend host | GCP Cloud Run |
 | Frontend host | Vercel |
@@ -42,7 +42,7 @@ Oversized functions (>150 lines) are sub-chunked with overlap. Unparseable files
 ## Environment Variables
 
 ```
-ANTHROPIC_API_KEY=
+GROQ_API_KEY=
 VOYAGE_API_KEY=
 QDRANT_URL=
 QDRANT_API_KEY=
