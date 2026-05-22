@@ -18,7 +18,7 @@ LANGUAGE_MAP = {
     ".js": "javascript",
     ".jsx": "javascript",
     ".ts": "typescript",
-    ".tsx": "typescript",
+    ".tsx": "typescript_tsx",  # separate tree-sitter grammar from .ts
     ".java": "java",
     ".go": "go",
 }

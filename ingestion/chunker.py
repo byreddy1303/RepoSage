@@ -2,6 +2,7 @@ from dataclasses import dataclass, field
 
 import tree_sitter_python as tspython
 import tree_sitter_javascript as tsjavascript
+import tree_sitter_typescript as tsts
 import tree_sitter_java as tsjava
 import tree_sitter_go as tsgo
 from tree_sitter import Language, Parser, Node
@@ -10,10 +11,19 @@ from ingestion.repo_loader import SourceFile
 
 PY_LANGUAGE = Language(tspython.language())
 JS_LANGUAGE = Language(tsjavascript.language())
+TS_LANGUAGE = Language(tsts.language_typescript())
+TSX_LANGUAGE = Language(tsts.language_tsx())
 JAVA_LANGUAGE = Language(tsjava.language())
 GO_LANGUAGE = Language(tsgo.language())
 
 _PARSERS: dict[str, Parser] = {}
+
+# tree-sitter-typescript has its own node names for some constructs
+_TS_CHUNK_TYPES = {
+    "function_declaration", "arrow_function", "method_definition",
+    "function_expression", "abstract_method_signature",
+    "interface_declaration", "type_alias_declaration", "enum_declaration",
+}
 
 
 def _get_parser(language: str) -> Parser | None:
@@ -21,7 +31,8 @@ def _get_parser(language: str) -> Parser | None:
         lang_obj = {
             "python": PY_LANGUAGE,
             "javascript": JS_LANGUAGE,
-            "typescript": JS_LANGUAGE,  # JS parser handles TS reasonably for chunking
+            "typescript": TS_LANGUAGE,
+            "typescript_tsx": TSX_LANGUAGE,
             "java": JAVA_LANGUAGE,
             "go": GO_LANGUAGE,
         }.get(language)
@@ -34,9 +45,11 @@ def _get_parser(language: str) -> Parser | None:
 
 # Node types that represent a top-level or method-level callable unit
 _CHUNK_NODE_TYPES: dict[str, set[str]] = {
-    "python": {"function_definition", "async_function_definition"},
+    # async def is function_definition in tree-sitter-python (async keyword is a child token)
+    "python": {"function_definition"},
     "javascript": {"function_declaration", "arrow_function", "method_definition", "function_expression"},
-    "typescript": {"function_declaration", "arrow_function", "method_definition", "function_expression"},
+    "typescript": _TS_CHUNK_TYPES,
+    "typescript_tsx": _TS_CHUNK_TYPES,
     "java": {"method_declaration", "constructor_declaration"},
     "go": {"function_declaration", "method_declaration"},
 }
@@ -180,24 +193,17 @@ def _line_based_chunks(source_file: SourceFile) -> list[CodeChunk]:
 
 
 def _error_ratio(node: Node) -> float:
-    """Approximate ratio of ERROR nodes to total nodes."""
-    errors = _count_errors(node)
-    total = _count_nodes(node)
+    """Approximate ratio of ERROR nodes to total nodes (iterative to avoid stack overflow)."""
+    errors = 0
+    total = 0
+    stack = [node]
+    while stack:
+        current = stack.pop()
+        total += 1
+        if current.type == "ERROR":
+            errors += 1
+        stack.extend(current.children)
     return errors / max(total, 1)
-
-
-def _count_errors(node: Node) -> int:
-    count = 1 if node.type == "ERROR" else 0
-    for child in node.children:
-        count += _count_errors(child)
-    return count
-
-
-def _count_nodes(node: Node) -> int:
-    count = 1
-    for child in node.children:
-        count += _count_nodes(child)
-    return count
 
 
 def chunk_files(source_files: list[SourceFile]) -> list[CodeChunk]:

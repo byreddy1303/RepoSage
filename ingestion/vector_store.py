@@ -1,4 +1,6 @@
+import hashlib
 import os
+import uuid
 from dotenv import load_dotenv
 from qdrant_client import QdrantClient
 from qdrant_client.models import (
@@ -6,6 +8,9 @@ from qdrant_client.models import (
     VectorParams,
     PointStruct,
     PayloadSchemaType,
+    Filter,
+    FieldCondition,
+    MatchValue,
 )
 
 from ingestion.chunker import CodeChunk
@@ -28,6 +33,13 @@ def _get_client() -> QdrantClient:
     return _client
 
 
+def _chunk_id(repo_url: str, file_path: str, start_line: int) -> str:
+    """Deterministic UUID5 derived from repo + file + line.
+    Same chunk always gets the same ID → idempotent re-ingestion."""
+    key = f"{repo_url}::{file_path}::{start_line}"
+    return str(uuid.uuid5(uuid.NAMESPACE_URL, key))
+
+
 def ensure_collection(collection: str) -> None:
     """Create the Qdrant collection if it doesn't already exist."""
     client = _get_client()
@@ -39,22 +51,34 @@ def ensure_collection(collection: str) -> None:
         )
         client.create_payload_index(collection, "language", PayloadSchemaType.KEYWORD)
         client.create_payload_index(collection, "file_path", PayloadSchemaType.KEYWORD)
+        client.create_payload_index(collection, "repo_url", PayloadSchemaType.KEYWORD)
         print(f"Created collection '{collection}'")
     else:
         print(f"Collection '{collection}' already exists")
+
+
+def delete_repo_chunks(repo_url: str, collection: str) -> None:
+    """Delete all previously ingested points for this repo (for idempotent re-ingestion)."""
+    client = _get_client()
+    client.delete(
+        collection_name=collection,
+        points_selector=Filter(
+            must=[FieldCondition(key="repo_url", match=MatchValue(value=repo_url))]
+        ),
+    )
 
 
 def upsert_chunks(
     chunks: list[CodeChunk],
     vectors: list[list[float]],
     collection: str,
-    id_offset: int = 0,
+    repo_url: str,
 ) -> None:
     """Upsert chunks + their vectors into Qdrant in batches."""
     client = _get_client()
     points = [
         PointStruct(
-            id=id_offset + i,
+            id=_chunk_id(repo_url, chunk.file_path, chunk.start_line),
             vector=vec,
             payload={
                 "text": chunk.text,
@@ -63,9 +87,10 @@ def upsert_chunks(
                 "end_line": chunk.end_line,
                 "language": chunk.language,
                 "parent_class": chunk.parent_class,
+                "repo_url": repo_url,
             },
         )
-        for i, (chunk, vec) in enumerate(zip(chunks, vectors))
+        for chunk, vec in zip(chunks, vectors)
     ]
 
     for i in range(0, len(points), UPSERT_BATCH):
