@@ -1,4 +1,4 @@
-# RepoSage
+# RepoContext
 
 **Ask plain-English questions about any GitHub repository and get cited answers that link back to the exact file and line.**
 
@@ -34,7 +34,7 @@
 
 ### The Key Design Decision
 
-Naive RAG splits code every N characters — cutting functions in half and separating them from their context. RepoSage chunks by **syntax tree** (using tree-sitter), so every chunk is a complete function, class, or method with its metadata intact (`file_path`, `start_line`, `end_line`, `language`, `parent_class`). This makes retrieved chunks semantically meaningful.
+Naive RAG splits code every N characters — cutting functions in half and separating them from their context. RepoContext chunks by **syntax tree** (using tree-sitter), so every chunk is a complete function, class, or method with its metadata intact (`file_path`, `start_line`, `end_line`, `language`, `parent_class`). This makes retrieved chunks semantically meaningful.
 
 ---
 
@@ -70,8 +70,8 @@ frontend/     # React + Tailwind chat UI
 ### 1. Clone and install
 
 ```bash
-git clone https://github.com/byreddy1303/RepoSage.git
-cd RepoSage
+git clone https://github.com/byreddy1303/RepoContext.git
+cd RepoContext
 python -m venv venv && source venv/bin/activate
 pip install -r requirements.txt
 ```
@@ -90,7 +90,7 @@ VOYAGE_API_KEY=...        # free tier at dash.voyageai.com
 QDRANT_URL=...            # free cluster at cloud.qdrant.io
 QDRANT_API_KEY=...
 GITHUB_TOKEN=...          # GitHub PAT (read-only)
-QDRANT_COLLECTION=reposage
+QDRANT_COLLECTION=RepoContext
 ```
 
 ### 3. Start the backend
